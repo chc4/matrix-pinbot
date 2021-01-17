@@ -64,7 +64,6 @@ async def main():
 
     # Set up event callbacks
     callbacks = Callbacks(client, store, config)
-    client.add_event_callback(callbacks.message, (RoomMessageText,))
     client.add_event_callback(callbacks.invite, (InviteMemberEvent,))
     client.add_event_callback(callbacks.decryption_failure, (MegolmEvent,))
     client.add_response_callback(callbacks.sync, (SyncResponse,))

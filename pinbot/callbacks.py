@@ -11,7 +11,6 @@ from nio import (
     UnknownEvent,
 )
 
-from pinbot.bot_commands import Command
 from pinbot.chat_functions import make_pill, react_to_event, send_text_to_room
 from pinbot.config import Config
 from pinbot.message_responses import Message
@@ -35,53 +34,6 @@ class Callbacks:
         self.config = config
         self.command_prefix = config.command_prefix
         self.synced = False
-
-    async def message(self, room: MatrixRoom, event: RoomMessageText) -> None:
-        """Callback for when a message event is received
-
-        Args:
-            room: The room the event came from.
-
-            event: The event defining the message.
-        """
-        if not self.synced:
-            # we got this reaction while catching up, ignore it
-            #logger.warn("Got message %s while syncing...", event.body)
-            return
-
-        # Extract the message text
-        msg = event.body
-
-        # Ignore messages from ourselves
-        if event.sender == self.client.user:
-            return
-
-        logger.debug(
-            f"Bot message received for room {room.display_name} | "
-            f"{room.user_name(event.sender)}: {msg}"
-        )
-
-        # Process as message if in a public room without command prefix
-        has_command_prefix = msg.startswith(self.command_prefix)
-
-        # room.is_group is often a DM, but not always.
-        # room.is_group does not allow room aliases
-        # room.member_count > 2 ... we assume a public room
-        # room.member_count <= 2 ... we assume a DM
-        if not has_command_prefix and room.member_count > 2:
-            # General message listener
-            message = Message(self.client, self.store, self.config, msg, room, event)
-            await message.process()
-            return
-
-        # Otherwise if this is in a 1-1 with the bot or features a command prefix,
-        # treat it as a command
-        if has_command_prefix:
-            # Remove the command prefix
-            msg = msg[len(self.command_prefix) :]
-
-        command = Command(self.client, self.store, self.config, msg, room, event)
-        await command.process()
 
     async def invite(self, room: MatrixRoom, event: InviteMemberEvent) -> None:
         """Callback for when an invite is received. Join the room specified in the invite.
