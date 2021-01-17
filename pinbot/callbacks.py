@@ -35,6 +35,7 @@ class Callbacks:
         self.config = config
         self.command_prefix = config.command_prefix
         self.synced = False
+        self.pinned = set()
 
     async def invite(self, room: MatrixRoom, event: InviteMemberEvent) -> None:
         """Callback for when an invite is received. Join the room specified in the invite.
@@ -109,6 +110,12 @@ class Callbacks:
         # We only care about pin emojis
         if reaction_emoji != "📌":
             return
+        # and only pins we haven't already saved
+        if reacted_to_id in self.pinned:
+            logger.info(
+                "Someone tried to pin %s multiple times, ignoring", reacted_to_id
+            )
+            return
 
         # Send a message to the pins room, archiving the pinned message
         # the matrix spec is absolute trash
@@ -155,6 +162,7 @@ f"""
                   }
                 }
             }, None, False)
+        self.pinned.add(reacted_to_id)
 
     async def decryption_failure(self, room: MatrixRoom, event: MegolmEvent) -> None:
         """Callback for when an event fails to decrypt. Inform the user.
