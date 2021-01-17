@@ -1,4 +1,5 @@
 import logging
+import asyncio
 
 from nio import (
     AsyncClient,
@@ -54,6 +55,7 @@ class Callbacks:
                     attempt,
                     result.message,
                 )
+                await asyncio.sleep(1)
             else:
                 break
         else:
