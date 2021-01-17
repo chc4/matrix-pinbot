@@ -6,7 +6,7 @@ from typing import Any, List, Optional
 
 import yaml
 
-from my_project_name.errors import ConfigError
+from pinbot.errors import ConfigError
 
 logger = logging.getLogger()
 logging.getLogger("peewee").setLevel(
@@ -104,6 +104,9 @@ class Config:
         self.homeserver_url = self._get_cfg(["matrix", "homeserver_url"], required=True)
 
         self.command_prefix = self._get_cfg(["command_prefix"], default="!c") + " "
+
+        self.pins_room = self._get_cfg(["pins_room"],
+                default="#pins:" + self.homeserver_url.split("://")[1])
 
     def _get_cfg(
         self,

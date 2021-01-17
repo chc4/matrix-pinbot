@@ -11,14 +11,16 @@ from nio import (
     InviteMemberEvent,
     LocalProtocolError,
     LoginError,
+    JoinError,
     MegolmEvent,
     RoomMessageText,
     UnknownEvent,
+    SyncResponse,
 )
 
-from my_project_name.callbacks import Callbacks
-from my_project_name.config import Config
-from my_project_name.storage import Storage
+from pinbot.callbacks import Callbacks
+from pinbot.config import Config
+from pinbot.storage import Storage
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +67,7 @@ async def main():
     client.add_event_callback(callbacks.message, (RoomMessageText,))
     client.add_event_callback(callbacks.invite, (InviteMemberEvent,))
     client.add_event_callback(callbacks.decryption_failure, (MegolmEvent,))
+    client.add_response_callback(callbacks.sync, (SyncResponse,))
     client.add_event_callback(callbacks.unknown, (UnknownEvent,))
 
     # Keep trying to reconnect on failure (with some time in-between)
@@ -103,6 +106,13 @@ async def main():
                 # Login succeeded!
 
             logger.info(f"Logged in as {config.user_id}")
+            # join the pins room we'll be writing to
+            result = client.join(config.pins_room)
+            if type(result) == JoinError:
+                raise Exception(
+                    f"Error joining pins room {config.pins_room}",
+                )
+
             await client.sync_forever(timeout=30000, full_state=True)
 
         except (ClientConnectionError, ServerDisconnectedError):

@@ -132,19 +132,19 @@ source env/bin/activate
 Then simply run the bot with:
 
 ```
-my-project-name
+matrix-pinbot
 ```
 
-You'll notice that "my-project-name" is scattered throughout the codebase. When
+You'll notice that "matrix-pinbot" is scattered throughout the codebase. When
 it comes time to modifying the code for your own purposes, you are expected to
-replace every instance of "my-project-name" and its variances with your own
+replace every instance of "matrix-pinbot" and its variances with your own
 project's name.
 
 By default, the bot will run with the config file at `./config.yaml`. However, an
 alternative relative or absolute filepath can be specified after the command:
 
 ```
-my-project-name other-config.yaml
+matrix-pinbot other-config.yaml
 ```
 
 ## Testing the bot works

@@ -11,11 +11,11 @@ from nio import (
     UnknownEvent,
 )
 
-from my_project_name.bot_commands import Command
-from my_project_name.chat_functions import make_pill, react_to_event, send_text_to_room
-from my_project_name.config import Config
-from my_project_name.message_responses import Message
-from my_project_name.storage import Storage
+from pinbot.bot_commands import Command
+from pinbot.chat_functions import make_pill, react_to_event, send_text_to_room
+from pinbot.config import Config
+from pinbot.message_responses import Message
+from pinbot.storage import Storage
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +34,7 @@ class Callbacks:
         self.store = store
         self.config = config
         self.command_prefix = config.command_prefix
+        self.synced = False
 
     async def message(self, room: MatrixRoom, event: RoomMessageText) -> None:
         """Callback for when a message event is received
@@ -43,6 +44,11 @@ class Callbacks:
 
             event: The event defining the message.
         """
+        if not self.synced:
+            # we got this reaction while catching up, ignore it
+            #logger.warn("Got message %s while syncing...", event.body)
+            return
+
         # Extract the message text
         msg = event.body
 
@@ -117,6 +123,14 @@ class Callbacks:
             reacted_to_id: The event ID that the reaction points to.
         """
         logger.debug(f"Got reaction to {room.room_id} from {event.sender}.")
+        if not self.synced:
+            # we got this reaction while catching up, ignore it
+            #logger.warn("Got reaction %s while syncing...", reacted_to_id)
+            return
+
+        # don't allow pinning of things in the pin room
+        if room.room_id == self.config.pins_room:
+            return
 
         # Get the original event that was reacted to
         event_response = await self.client.room_get_event(room.room_id, reacted_to_id)
@@ -126,25 +140,67 @@ class Callbacks:
             )
             return
         reacted_to_event = event_response.event
-
-        # Only acknowledge reactions to events that we sent
-        if reacted_to_event.sender != self.config.user_id:
+        if isinstance(reacted_to_event, MegolmEvent):
+            logger.error(
+                "Unable to decrypt event reacted to (%s)", reacted_to_id
+            )
             return
 
-        # Send a message acknowledging the reaction
-        reaction_sender_pill = make_pill(event.sender)
-        reaction_content = (
+        # Ignore our own reactions
+        if reacted_to_event.sender == self.config.user_id:
+            return
+        reaction_emoji = (
             event.source.get("content", {}).get("m.relates_to", {}).get("key")
         )
-        message = (
-            f"{reaction_sender_pill} reacted to this event with `{reaction_content}`!"
+        # We only care about pin emojis
+        if reaction_emoji != "📌":
+            return
+
+        # Send a message to the pins room, archiving the pinned message
+        # the matrix spec is absolute trash
+        pinned_sender_pill = make_pill(reacted_to_event.sender)
+        logger.info(f"Pinning `{reacted_to_event.body}`")
+        fallback_body = reacted_to_event.body.join('\n> ')
+        body = (
+f"""
+> {reacted_to_event.sender[0]} {fallback_body}
+
+Pinned
+"""
         )
-        await send_text_to_room(
-            self.client,
-            room.room_id,
-            message,
-            reply_to_event_id=reacted_to_id,
+        # how do the matrix.to URIs work?? the link is useless
+        room_slug = room.room_id
+        event_slug = reacted_to_id
+        quote_body = reacted_to_event.formatted_body if reacted_to_event.formatted_body is not None else reacted_to_event.body
+        formatted = (
+f"""
+<mx-reply>
+  <blockquote>
+    <a href="https://matrix.to/#/{room_slug}/{event_slug}">Pinned</a>
+    {pinned_sender_pill}
+    <br />
+    <!-- This is where the related event's HTML would be. -->
+    {quote_body}
+  </blockquote>
+</mx-reply>
+"""
         )
+        # probably gotta escape all this shit huh
+        logging.info("Pinning message by %s in %s to %s", pinned_sender_pill, reacted_to_id, self.config.pins_room)
+        await self.client.room_send(
+            self.config.pins_room,
+            "m.room.message",
+            {
+                "msgtype": "m.text",
+                "body": body,
+                "format": "org.matrix.custom.html",
+                "formatted_body": formatted,
+                "m.relates_to": {
+                  "m.in_reply_to": {
+                    "event_id": reacted_to_id
+                  }
+                }
+            }, None, False)
 
     async def decryption_failure(self, room: MatrixRoom, event: MegolmEvent) -> None:
         """Callback for when an event fails to decrypt. Inform the user.
@@ -167,12 +223,12 @@ class Callbacks:
         red_x_and_lock_emoji = "❌ 🔐"
 
         # React to the undecryptable event with some emoji
-        await react_to_event(
-            self.client,
-            room.room_id,
-            event.event_id,
-            red_x_and_lock_emoji,
-        )
+        #await react_to_event(
+        #    self.client,
+        #    room.room_id,
+        #    event.event_id,
+        #    red_x_and_lock_emoji,
+        #)
 
     async def unknown(self, room: MatrixRoom, event: UnknownEvent) -> None:
         """Callback for when an event with a type that is unknown to matrix-nio is received.
@@ -196,3 +252,7 @@ class Callbacks:
         logger.debug(
             f"Got unknown event with type to {event.type} from {event.sender} in {room.room_id}."
         )
+
+    async def sync(self, response):
+        #print(f"We synced, token: {response.next_batch}")
+        self.synced = True
