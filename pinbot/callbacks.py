@@ -156,11 +156,6 @@ f"""
                 "body": body,
                 "format": "org.matrix.custom.html",
                 "formatted_body": formatted,
-                "m.relates_to": {
-                  "m.in_reply_to": {
-                    "event_id": reacted_to_id
-                  }
-                }
             }, None, False)
         self.pinned.add(reacted_to_id)
 
