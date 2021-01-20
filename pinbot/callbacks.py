@@ -8,6 +8,7 @@ from nio import (
     MatrixRoom,
     MegolmEvent,
     RoomGetEventError,
+    RoomMessageImage,
     RoomMessageText,
     UnknownEvent,
 )
@@ -116,6 +117,9 @@ class Callbacks:
                 "Someone tried to pin %s multiple times, ignoring", reacted_to_id
             )
             return
+        if not hasattr(reacted_to_event, 'body'):
+            logger.error("Trying to pin an event with no body, bailing!")
+            return
 
         # Send a message to the pins room, archiving the pinned message
         # the matrix spec is absolute trash
@@ -132,7 +136,14 @@ Pinned
         # how do the matrix.to URIs work?? the link is useless
         room_slug = room.room_id
         event_slug = reacted_to_id
-        quote_body = reacted_to_event.formatted_body if reacted_to_event.formatted_body is not None else reacted_to_event.body
+        # something we can quote
+        if hasattr(reacted_to_event, 'formatted_body') and reacted_to_event.formatted_body is not None:
+            quote_body = reacted_to_event.formatted_body
+        # an uploaded picture
+        elif isinstance(reacted_to_event, RoomMessageImage):
+            quote_body = '<img src="{}">{}</img>'.format(reacted_to_event.url, reacted_to_event.body)
+        else:
+            quote_body = reacted_to_event.body
         formatted = (
 f"""
 <mx-reply>
